@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expense Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            text-align: center;
+            margin: 0;
+            background: #000000;
+            color: white;
+        }
+        .container {
+            background: linear-gradient(135deg, #2a2a2a, #3b3b3b);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            max-width: 800px;
+            margin: 50px auto;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
+        }
+        input, select, button {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        input, select {
+            color: white !important;
+            background: black;
+        }
+        button {
+            background: linear-gradient(90deg, #d4a5a5, #a5c1d4);
+            color: white;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        button:hover {
+            transform: scale(1.05);
+        }
+        table {
+            width: 100%;
+            margin-top: 20px;
+            border-collapse: collapse;
+            border: 2px solid white;
+        }
+        th, td {
+            border: 1px solid white;
+            padding: 10px;
+            text-align: center;
+        }
+        .delete-btn {
+            background: red;
+            color: white;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: 0.3s;
+        }
+        .delete-btn:hover {
+            background: darkred;
+        }
+        .summary-container {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="expenseForm">
+        <h1>Expense Tracker</h1>
+        <input type="number" id="amount" placeholder="Amount">
+        <select id="category"></select>
+        <input type="text" id="newCategory" placeholder="New Category">
+        <button onclick="addCategory()">Add Category</button>
+        <button onclick="addExpense()">Add Expense</button>
+        <button onclick="resetExpenses()">Reset Expenses</button>
+        <button onclick="showSummary()">Show Expense Summary</button>
+        <button onclick="setBudget()">Set Category Budget</button>
+        <button onclick="addRecurringExpense()">Add Recurring Expense</button>
+
+        <h2>Expense Table</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Category</th>
+                    <th>Amount (₹)</th>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="expenseTable"></tbody>
+        </table>
+    </div>
+
+    <div class="container summary-container" id="expenseSummary">
+        <h2>Expense Summary</h2>
+        <canvas id="barChart"></canvas>
+        <canvas id="pieChart"></canvas>
+        <button onclick="goBack()">Go Back</button>
+    </div>
+
+    <script>
+        let expenses = JSON.parse(localStorage.getItem("expenses")) || [];
+        let categories = JSON.parse(localStorage.getItem("categories")) || ["Food", "Transport", "Entertainment", "Shopping"];
+        let budgets = JSON.parse(localStorage.getItem("budgets")) || {};
+        let recurringExpenses = JSON.parse(localStorage.getItem("recurringExpenses")) || [];
+        let barChartInstance, pieChartInstance;
+
+        function populateCategories() {
+            let categorySelect = document.getElementById("category");
+            categorySelect.innerHTML = "";
+            categories.forEach(cat => {
+                let option = document.createElement("option");
+                option.textContent = cat;
+                categorySelect.appendChild(option);
+            });
+        }
+
+        function addCategory() {
+            let newCategory = document.getElementById("newCategory").value.trim();
+            if (newCategory && !categories.includes(newCategory)) {
+                categories.push(newCategory);
+                localStorage.setItem("categories", JSON.stringify(categories));
+                populateCategories();
+            }
+        }
+
+        function addExpense() {
+            let amount = document.getElementById("amount").value;
+            let category = document.getElementById("category").value;
+            let now = new Date();
+            if (amount && category) {
+                let expense = {
+                    amount: parseFloat(amount),
+                    category,
+                    date: now.toLocaleDateString(),
+                    time: now.toLocaleTimeString(),
+                    timestamp: now.getTime()
+                };
+                expenses.push(expense);
+                localStorage.setItem("expenses", JSON.stringify(expenses));
+                displayExpenses();
+                checkBudget(category, expense.amount);
+                alert("Expense added successfully!");
+            }
+        }
+
+        function checkBudget(category, amount) {
+            if (budgets[category]) {
+                let totalSpent = expenses.filter(exp => exp.category === category).reduce((acc, exp) => acc + exp.amount, 0) + amount;
+                if (totalSpent > budgets[category] * 0.75) {
+                    alert(`Warning: You have used more than 75% of your budget for ${category}!`);
+                }
+            }
+        }
+
+        function setBudget() {
+            let category = document.getElementById("category").value;
+            let budget = prompt(`Set budget for ${category}:`);
+            if (budget && !isNaN(budget)) {
+                budgets[category] = parseFloat(budget);
+                localStorage.setItem("budgets", JSON.stringify(budgets));
+                alert(`Budget for ${category} set to ₹${budget}`);
+            }
+        }
+
+        function addRecurringExpense() {
+            let amount = document.getElementById("amount").value;
+            let category = document.getElementById("category").value;
+            let frequency = prompt("Enter frequency (daily, weekly, monthly):");
+            let now = new Date();
+            if (amount && category && frequency) {
+                let recurringExpense = {
+                    amount: parseFloat(amount),
+                    category,
+                    frequency,
+                    lastPaid: now.getTime()
+                };
+                recurringExpenses.push(recurringExpense);
+                localStorage.setItem("recurringExpenses", JSON.stringify(recurringExpenses));
+                alert("Recurring expense added successfully!");
+            }
+        }
+
+        function processRecurringExpenses() {
+            let now = new Date();
+            recurringExpenses.forEach(exp => {
+                let lastPaidDate = new Date(exp.lastPaid);
+                let nextPaymentDate = new Date(lastPaidDate);
+
+                if (exp.frequency === "daily") {
+                    nextPaymentDate.setDate(lastPaidDate.getDate() + 1);
+                } else if (exp.frequency === "weekly") {
+                    nextPaymentDate.setDate(lastPaidDate.getDate() + 7);
+                } else if (exp.frequency === "monthly") {
+                    nextPaymentDate.setMonth(lastPaidDate.getMonth() + 1);
+                }
+
+                if (now >= nextPaymentDate) {
+                    let expense = {
+                        amount: exp.amount,
+                        category: exp.category,
+                        date: now.toLocaleDateString(),
+                        time: now.toLocaleTimeString(),
+                        timestamp: now.getTime()
+                    };
+                    expenses.push(expense);
+                    localStorage.setItem("expenses", JSON.stringify(expenses));
+                    exp.lastPaid = now.getTime(); // Update last paid date
+                    alert(`Recurring expense for ${exp.category} added: ₹${exp.amount}`);
+                }
+            });
+            localStorage.setItem("recurringExpenses", JSON.stringify(recurringExpenses));
+        }
+
+        function editExpense(index) {
+            let expense = expenses[index];
+            document.getElementById("amount").value = expense.amount;
+            document.getElementById("category").value = expense.category;
+            deleteExpense(index);
+        }
+
+        function deleteExpense(index) {
+            expenses.splice(index, 1);
+            localStorage.setItem("expenses", JSON.stringify(expenses));
+            displayExpenses();
+        }
+
+        function resetExpenses() {
+            if (confirm("Are you sure you want to reset all expenses?")) {
+                expenses = [];
+                localStorage.removeItem("expenses");
+                displayExpenses();
+            }
+        }
+
+        function showSummary() {
+            document.getElementById("expenseForm").style.display = "none";
+            document.getElementById("expenseSummary").style.display = "block";
+            updateCharts();
+        }
+
+        function goBack() {
+            document.getElementById("expenseForm").style.display = "block";
+            document.getElementById("expenseSummary").style.display = "none";
+        }
+
+        function displayExpenses() {
+            let tableBody = document.getElementById("expenseTable");
+            tableBody.innerHTML = "";
+            expenses.forEach((exp, index) => {
+                let row = `<tr>
+                    <td>${exp.category}</td>
+                    <td>₹${exp.amount}</td>
+                    <td>${exp.date}</td>
+                    <td>${exp.time}</td>
+                    <td>
+                        <button class="delete-btn" onclick="deleteExpense(${index})">Delete</button>
+                        <button onclick="editExpense(${index})">Edit</button>
+                    </td>
+                </tr>`;
+                tableBody.innerHTML += row;
+            });
+        }
+
+        function updateCharts() {
+            let summary = {};
+            expenses.forEach(exp => {
+                summary[exp.category] = (summary[exp.category] || 0) + exp.amount;
+            });
+            let categories = Object.keys(summary);
+            let values = Object.values(summary);
+
+            if (barChartInstance) barChartInstance.destroy();
+            if (pieChartInstance) pieChartInstance.destroy();
+
+            barChartInstance = new Chart(document.getElementById("barChart"), {
+                type: "bar",
+                data: { labels: categories, datasets: [{ label: "Expenses (₹)", data: values }] }
+            });
+
+            pieChartInstance = new Chart(document.getElementById("pieChart"), {
+                type: "pie",
+                data: { labels: categories, datasets: [{ data: values }] }
+            });
+        }
+
+        // Process recurring expenses on page load
+        processRecurringExpenses();
+        populateCategories();
+        displayExpenses();
+    </script>
+</body>
+</html>
