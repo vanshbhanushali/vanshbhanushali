@@ -1,7 +1,5 @@
 - 👋 Hi, I’m @vanshbhanushali
 - 🌱quick learning
-- odoo X charusat hackathon project hase been uploaded uploaded 
-- drive link for the video: https://drive.google.com/drive/folders/1RZerP6Ylts35_IRPa17UeQMgo2KDD_lY?usp=sharing
 - 💞️ I’m looking to collaborate on ...
 - 📫 How to reach me :- @vanshkbhanushali@gmail.com...
 
